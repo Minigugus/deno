@@ -10,12 +10,16 @@
 
 #[cfg(unix)]
 use eager_unix as eager;
+use errors::bad_resource;
 use errors::DenoError;
+use errors::DenoResult;
+use http_server;
 use tokio_util;
 use tokio_write;
 
 use futures;
 use futures::future::{Either, FutureResult};
+use futures::Future;
 use futures::Poll;
 use std;
 use std::collections::HashMap;
@@ -56,6 +60,8 @@ enum Repr {
   FsFile(tokio::fs::File),
   TcpListener(tokio::net::TcpListener),
   TcpStream(tokio::net::TcpStream),
+  HttpServer(http_server::HttpServer),
+  HttpTransaction(http_server::Transaction),
 }
 
 pub fn table_entries() -> Vec<(i32, String)> {
@@ -87,6 +93,8 @@ fn inspect_repr(repr: &Repr) -> String {
     Repr::FsFile(_) => "fsFile",
     Repr::TcpListener(_) => "tcpListener",
     Repr::TcpStream(_) => "tcpStream",
+    Repr::HttpServer(_) => "httpServer",
+    Repr::HttpTransaction(_) => "httpTransaction",
   };
 
   String::from(h_repr)
@@ -152,10 +160,7 @@ impl AsyncRead for Resource {
         Repr::FsFile(ref mut f) => f.poll_read(buf),
         Repr::Stdin(ref mut f) => f.poll_read(buf),
         Repr::TcpStream(ref mut f) => f.poll_read(buf),
-        Repr::Stdout(_) | Repr::Stderr(_) => {
-          panic!("Cannot read from stdout/stderr")
-        }
-        Repr::TcpListener(_) => panic!("Cannot read"),
+        _ => panic!("Cannot read"),
       },
     }
   }
@@ -182,8 +187,7 @@ impl AsyncWrite for Resource {
         Repr::Stdout(ref mut f) => f.poll_write(buf),
         Repr::Stderr(ref mut f) => f.poll_write(buf),
         Repr::TcpStream(ref mut f) => f.poll_write(buf),
-        Repr::Stdin(_) => panic!("Cannot write to stdin"),
-        Repr::TcpListener(_) => panic!("Cannot write"),
+        _ => panic!("Cannot write"),
       },
     }
   }
@@ -221,6 +225,51 @@ pub fn add_tcp_stream(stream: tokio::net::TcpStream) -> Resource {
   let r = tg.insert(rid, Repr::TcpStream(stream));
   assert!(r.is_none());
   Resource { rid }
+}
+
+pub fn add_http_server(s: http_server::HttpServer) -> Resource {
+  let rid = new_rid();
+  let mut tg = RESOURCE_TABLE.lock().unwrap();
+  match tg.insert(rid, Repr::HttpServer(s)) {
+    Some(_) => panic!("There is already a file with that rid"),
+    None => Resource { rid },
+  }
+}
+
+pub fn add_http_transaction(transaction: http_server::Transaction) -> Resource {
+  let rid = new_rid();
+  let mut tg = RESOURCE_TABLE.lock().unwrap();
+  match tg.insert(rid, Repr::HttpTransaction(transaction)) {
+    Some(_) => panic!("There is already a file with that rid"),
+    None => Resource { rid },
+  }
+}
+
+pub fn http_accept(
+  rid: ResourceId,
+) -> impl Future<Item = http_server::Transaction, Error = DenoError> {
+  let mut table = RESOURCE_TABLE.lock().unwrap();
+  let maybe_repr = table.get_mut(&rid);
+  match maybe_repr {
+    Some(Repr::HttpServer(ref mut s)) => Either::A(s.accept()),
+    _ => Either::B(futures::future::err(bad_resource())),
+  }
+}
+
+pub fn http_write_response(
+  rid: ResourceId,
+  response: http_server::Res,
+) -> DenoResult<()> {
+  let mut table = RESOURCE_TABLE.lock().unwrap();
+  let maybe_repr = table.get_mut(&rid);
+  match maybe_repr {
+    Some(Repr::HttpTransaction(ref mut transaction)) => {
+      let tx = transaction.response_tx.take().unwrap();
+      tx.send(response).unwrap();
+      Ok(())
+    }
+    _ => Err(bad_resource()),
+  }
 }
 
 pub fn lookup(rid: ResourceId) -> Option<Resource> {
