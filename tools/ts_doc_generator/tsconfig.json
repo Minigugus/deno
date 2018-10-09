@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+      "moduleResolution": "node",
+      "strict": true,
+      "target": "esnext"
+    },
+    "files": [
+      "./generate_json_docs.ts"
+    ]
+  }
+  
