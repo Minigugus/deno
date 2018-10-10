@@ -75,14 +75,6 @@ export default function denoMain() {
     os.exit(0);
   }
 
-  // handle `--version`
-  if (startResMsg.versionFlag()) {
-    console.log("deno:", startResMsg.denoVersion());
-    console.log("v8:", startResMsg.v8Version());
-    console.log("typescript:", version);
-    os.exit(0);
-  }
-
   const cwd = startResMsg.cwd();
   log("cwd", cwd);
 
@@ -93,6 +85,18 @@ export default function denoMain() {
   log("args", args);
   Object.freeze(args);
   const inputFn = args[0];
+  if (!inputFn) {
+    console.log("No input script specified.");
+    os.exit(1);
+  }
+
+  // handle `--deps`
+  if (startResMsg.depsFlag()) {
+    for (const dep of compiler.getModuleDependencies(inputFn, `${cwd}/`)) {
+      console.log(dep);
+    }
+    os.exit(0);
+  }
 
   compiler.recompile = startResMsg.recompileFlag();
 

@@ -197,10 +197,7 @@ fn op_start(
       argv: Some(argv_off),
       debug_flag: state.flags.log_debug,
       recompile_flag: state.flags.recompile,
-      types_flag: state.flags.types,
-      version_flag: state.flags.version,
-      v8_version: Some(v8_version_off),
-      deno_version: Some(deno_version_off),
+      types_flag: state.flags.types_flag,
       ..Default::default()
     },
   );

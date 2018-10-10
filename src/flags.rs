@@ -24,16 +24,43 @@ pub struct DenoFlags {
   pub allow_write: bool,
   pub allow_net: bool,
   pub allow_env: bool,
-  pub types: bool,
+  pub deps_flag: bool,
+  pub types_flag: bool,
 }
 
-pub fn get_usage(opts: &Options) -> String {
-  format!(
-    "Usage: deno script.ts {}
-Environment variables:
-        DENO_DIR        Set deno's base directory.",
-    opts.usage("")
-  )
+pub fn process(flags: &DenoFlags) {
+  if flags.help {
+    print_usage();
+    exit(0);
+  }
+
+  if flags.version {
+    version::print_version();
+    exit(0);
+  }
+
+  let mut log_level = log::LevelFilter::Info;
+  if flags.log_debug {
+    log_level = log::LevelFilter::Debug;
+  }
+  log::set_max_level(log_level);
+}
+
+pub fn print_usage() {
+  println!(
+    "Usage: deno script.ts
+--allow-write      Allow file system write access.
+--allow-net        Allow network access.
+--allow-env        Allow environment access.
+--recompile        Force recompilation of TypeScript code.
+-v or --version    Print the version.
+-r or --reload     Reload cached remote resources.
+-D or --log-debug  Log debug output.
+-h or --help       Print this message.
+--v8-options       Print V8 command line options.
+--deps             Print module dependencies.
+--types            Print global environment types."
+  );
 }
 
 // Parses flags for deno. This does not do v8_set_flags() - call that separately.
@@ -59,11 +86,38 @@ pub fn set_flags(
   opts.optflag("", "types", "Print runtime TypeScript declarations.");
 
   let mut flags = DenoFlags::default();
+  let mut rest = Vec::new();
+  let mut arg_iter = args.iter();
 
-  let matches = match opts.parse(&args) {
-    Ok(m) => m,
-    Err(f) => {
-      return Err(f.to_string());
+  while let Some(a) = arg_iter.next() {
+    if a.len() > 1 && &a[0..2] == "--" {
+      match a.as_str() {
+        "--help" => flags.help = true,
+        "--log-debug" => flags.log_debug = true,
+        "--version" => flags.version = true,
+        "--reload" => flags.reload = true,
+        "--recompile" => flags.recompile = true,
+        "--allow-write" => flags.allow_write = true,
+        "--allow-net" => flags.allow_net = true,
+        "--allow-env" => flags.allow_env = true,
+        "--deps" => flags.deps_flag = true,
+        "--types" => flags.types_flag = true,
+        "--" => break,
+        _ => unimplemented!(),
+      }
+    } else if a.len() > 1 && &a[0..1] == "-" {
+      let mut iter = a.chars().skip(1); // skip the "-"
+      while let Some(f) = iter.next() {
+        match f {
+          'h' => flags.help = true,
+          'D' => flags.log_debug = true,
+          'v' => flags.version = true,
+          'r' => flags.reload = true,
+          _ => unimplemented!(),
+        }
+      }
+    } else {
+      rest.push(a.clone());
     }
   };
 
@@ -160,16 +214,20 @@ fn test_set_flags_4() {
 
 #[test]
 fn test_set_flags_5() {
-  let (flags, rest, _) = set_flags(svec!["deno", "--types"]).unwrap();
+  let (flags, rest) = set_flags(svec!["deno", "--types"]);
   assert_eq!(rest, svec!["deno"]);
   assert_eq!(
     flags,
     DenoFlags {
-      types: true,
+      types_flag: true,
       ..DenoFlags::default()
     }
   )
 }
+
+// Returns args passed to V8, followed by args passed to JS
+fn v8_set_flags_preprocess(args: Vec<String>) -> (Vec<String>, Vec<String>) {
+  let mut rest = vec![];
 
 #[test]
 fn test_set_bad_flags_1() {
