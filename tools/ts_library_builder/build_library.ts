@@ -1,11 +1,14 @@
 import { writeFileSync } from "fs";
+import { join } from "path";
 import * as prettier from "prettier";
 import {
   ExpressionStatement,
+  ModuleKind,
+  ModuleResolutionKind,
   NamespaceDeclarationKind,
   Project,
+  ScriptTarget,
   SourceFile,
-  ts,
   Type,
   TypeGuards
 } from "ts-simple-ast";
@@ -13,16 +16,12 @@ import {
   addInterfaceProperty,
   addSourceComment,
   addVariableDeclaration,
-  appendSourceFile,
   checkDiagnostics,
   flattenNamespace,
   getSourceComment,
   loadDtsFiles,
   loadFiles,
-  logDiagnostics,
-  namespaceSourceFile,
-  normalizeSlashes,
-  addTypeAlias
+  namespaceSourceFile
 } from "./ast_util";
 
 export interface BuildLibraryOptions {
@@ -53,13 +52,14 @@ export interface BuildLibraryOptions {
   silent?: boolean;
 }
 
-const { ModuleKind, ModuleResolutionKind, ScriptTarget } = ts;
-
 /**
  * A preamble which is appended to the start of the library.
  */
 // tslint:disable-next-line:max-line-length
 const libPreamble = `// Copyright 2018 the Deno authors. All rights reserved. MIT license.
+
+// Note that \`@internal/*\` modules are internal to Deno and can only be used
+// for their type information.
 
 /// <reference no-default-lib="true" />
 /// <reference lib="esnext" />
@@ -79,9 +79,6 @@ function extract(sourceFile: SourceFile, enumNames: string[]): string {
   for (const enumName of enumNames) {
     const enumDeclaration = sourceFile.getEnumOrThrow(enumName);
     enumDeclaration.setHasDeclareKeyword(false);
-    // we are not copying JSDocs or other trivia here because msg_generated only
-    // contains some non-useful JSDocs and comments that are not ideal to copy
-    // over
     output += enumDeclaration.getText();
   }
   return output;
@@ -98,7 +95,7 @@ interface FlattenOptions {
 }
 
 /** Flatten a module */
-export function flatten({
+function flatten({
   basePath,
   customSources,
   filePath,
@@ -126,36 +123,54 @@ export function flatten({
   namespace.addStatements(statements);
 }
 
-interface MergeGlobalOptions {
+interface MergeOptions {
   basePath: string;
-  debug?: boolean;
   declarationProject: Project;
-  filePath: string;
+  debug?: boolean;
   globalVarName: string;
+  filePath: string;
   inputProject: Project;
   interfaceName: string;
+  namespaceName: string;
   targetSourceFile: SourceFile;
 }
 
-/** Take a module and merge it into the global scope */
-export function mergeGlobal({
+/** Take a module and merge into into a single namespace */
+function merge({
   basePath,
-  debug,
   declarationProject,
-  filePath,
+  debug,
   globalVarName,
+  filePath,
   inputProject,
   interfaceName,
+  namespaceName,
   targetSourceFile
-}: MergeGlobalOptions): void {
-  // Add the global object interface
-  const interfaceDeclaration = targetSourceFile.addInterface({
-    name: interfaceName,
-    hasDeclareKeyword: true
+}: MergeOptions) {
+  // We have to build the module/namespace in small pieces which will reflect
+  // how the global runtime environment will be for Deno
+
+  // We need to add a module named `"globals"` which will contain all the global
+  // runtime context
+  const mergedModule = targetSourceFile.addNamespace({
+    name: namespaceName,
+    hasDeclareKeyword: true,
+    declarationKind: NamespaceDeclarationKind.Module
+  });
+
+  // Add the global Window interface
+  const interfaceDeclaration = mergedModule.addInterface({
+    name: interfaceName
+  });
+
+  // Add the global scope augmentation module of the "globals" module
+  const mergedGlobalNamespace = mergedModule.addNamespace({
+    name: "global",
+    declarationKind: NamespaceDeclarationKind.Global
   });
 
   // Declare the global variable
-  addVariableDeclaration(targetSourceFile, globalVarName, interfaceName, true);
+  addVariableDeclaration(mergedGlobalNamespace, globalVarName, interfaceName);
 
   // Add self reference to the global variable
   addInterfaceProperty(interfaceDeclaration, globalVarName, interfaceName);
@@ -186,9 +201,9 @@ export function mergeGlobal({
           TypeGuards.isPropertyAccessExpression(leftExpression) &&
           leftExpression.getExpression().getText() === globalVarName
         ) {
-          const globalVarProperty = leftExpression.getName();
-          if (globalVarProperty !== globalVarName) {
-            globalVariables.set(globalVarProperty, {
+          const windowProperty = leftExpression.getName();
+          if (windowProperty !== globalVarName) {
+            globalVariables.set(windowProperty, {
               type: firstChild.getType(),
               node
             });
@@ -213,18 +228,8 @@ export function mergeGlobal({
         dependentSourceFiles.add(valueDeclaration.getSourceFile());
       }
     }
-    addVariableDeclaration(targetSourceFile, property, type, true);
+    addVariableDeclaration(mergedGlobalNamespace, property, type);
     addInterfaceProperty(interfaceDeclaration, property, type);
-  }
-
-  // We need to copy over any type aliases
-  for (const typeAlias of sourceFile.getTypeAliases()) {
-    addTypeAlias(
-      targetSourceFile,
-      typeAlias.getName(),
-      typeAlias.getType().getText(sourceFile),
-      true
-    );
   }
 
   // We need to ensure that we only namespace each source file once, so we
@@ -235,7 +240,6 @@ export function mergeGlobal({
   // declaration source file into a namespace that exists within the merged
   // namespace
   const importDeclarations = sourceFile.getImportDeclarations();
-  const namespaces = new Set<string>();
   for (const declaration of importDeclarations) {
     const declarationSourceFile = declaration.getModuleSpecifierSourceFile();
     if (
@@ -251,11 +255,10 @@ export function mergeGlobal({
       const dtsSourceFile = declarationProject.getSourceFileOrThrow(
         dtsFilePath
       );
-      targetSourceFile.addStatements(
+      mergedModule.addStatements(
         namespaceSourceFile(dtsSourceFile, {
           debug,
           namespace: declaration.getNamespaceImportOrThrow().getText(),
-          namespaces,
           rootPath: basePath,
           sourceFileMap
         })
@@ -264,7 +267,7 @@ export function mergeGlobal({
   }
 
   if (debug) {
-    addSourceComment(targetSourceFile, sourceFile, basePath);
+    addSourceComment(mergedModule, sourceFile, basePath);
   }
 }
 
@@ -323,14 +326,6 @@ export function main({
   // emit the project, which will be only the declaration files
   const inputEmitResult = inputProject.emitToMemory();
 
-  const inputDiagnostics = inputEmitResult
-    .getDiagnostics()
-    .map(d => d.compilerObject);
-  logDiagnostics(inputDiagnostics);
-  if (inputDiagnostics.length) {
-    process.exit(1);
-  }
-
   // the declaration project will be the target for the emitted files from
   // the input project, these will be used to transfer information over to
   // the final library file
@@ -350,7 +345,7 @@ export function main({
 
   // we don't want to add to the declaration project any of the original
   // `.ts` source files, so we need to filter those out
-  const jsPath = normalizeSlashes(`${basePath}/js`);
+  const jsPath = join(basePath, "js");
   const inputProjectFiles = inputProject
     .getSourceFiles()
     .map(sourceFile => sourceFile.getFilePath())
@@ -418,30 +413,21 @@ export function main({
     console.log(`Created module "deno".`);
   }
 
-  mergeGlobal({
+  merge({
     basePath,
-    debug,
     declarationProject,
-    filePath: `${basePath}/js/globals.ts`,
+    debug,
     globalVarName: "window",
+    filePath: `${basePath}/js/globals.ts`,
     inputProject,
     interfaceName: "Window",
+    namespaceName: `"globals"`,
     targetSourceFile: libDTs
   });
 
   if (!silent) {
-    console.log(`Merged "globals" into global scope.`);
+    console.log(`Created module "globals".`);
   }
-
-  // Since we flatten the namespaces, we don't attempt to import `text-encoding`
-  // so we then need to concatenate that onto the `libDts` so it can stand on
-  // its own.
-  const textEncodingSourceFile = outputProject.getSourceFileOrThrow(
-    textEncodingFilePath
-  );
-  appendSourceFile(textEncodingSourceFile, libDTs);
-  // Removing it from the project so we know the libDTs can stand on its own.
-  outputProject.removeSourceFile(textEncodingSourceFile);
 
   // Add the preamble
   libDTs.insertStatements(0, libPreamble);
