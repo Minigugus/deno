@@ -126,6 +126,7 @@ ts_sources = [
   "js/util.ts",
   "js/v8_source_maps.ts",
   "js/write_file.ts",
+
   "tsconfig.json",
 
   # Listing package.json and yarn.lock as sources ensures the bundle is rebuilt
@@ -238,10 +239,7 @@ run_node("deno_runtime_declaration") {
     ":msg_ts",
   ]
   args = [
-    rebase_path("node_modules/ts-node/dist/bin.js", root_build_dir),
-    "--project",
-    rebase_path("tools/ts_library_builder/tsconfig.json"),
-    rebase_path("tools/ts_library_builder/main.ts", root_build_dir),
+    rebase_path("tools/ts_library_builder/main", root_build_dir),
     "--basePath",
     rebase_path(".", root_build_dir),
     "--buildPath",
@@ -251,7 +249,9 @@ run_node("deno_runtime_declaration") {
     "--silent",
   ]
   if (is_debug) {
-    args += [ "--debug" ]
+    args += [
+      "--debug",
+    ]
   }
 }
 

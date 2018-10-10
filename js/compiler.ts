@@ -714,7 +714,7 @@ export class DenoCompiler
       let moduleMetaData: ModuleMetaData;
       if (name === "deno") {
         // builtin modules are part of the runtime lib
-        moduleMetaData = this.resolveModule(LIB_RUNTIME, ASSETS);
+        resolvedFileName = this._resolveModuleName(LIB_RUNTIME, ASSETS);
       } else if (name === "typescript") {
         moduleMetaData = this.resolveModule("typescript.d.ts", ASSETS);
       } else {
