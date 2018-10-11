@@ -5,8 +5,7 @@ import subprocess
 import re
 
 
-def run_unit_test(deno_exe, permStr, flags=[]):
-    cmd = [deno_exe, "--reload", "js/unit_tests.ts", permStr] + flags
+def run_unit_test2(cmd):
     process = subprocess.Popen(
         cmd,
         bufsize=1,
@@ -29,6 +28,11 @@ def run_unit_test(deno_exe, permStr, flags=[]):
         sys.exit(errcode)
 
 
+def run_unit_test(deno_exe, permStr, flags=[]):
+    cmd = [deno_exe, "--reload", "js/unit_tests.ts", permStr] + flags
+    run_unit_test2(cmd)
+
+
 # We want to test many ops in deno which have different behavior depending on
 # the permissions set. These tests can specify which permissions they expect,
 # which appends a special string like "permW1N0" to the end of the test name.
@@ -42,6 +46,14 @@ def unit_tests(deno_exe):
     run_unit_test(deno_exe, "permW0N0E1", ["--allow-env"])
     # TODO We might accidentally miss some. We should be smarter about which we
     # run. Maybe we can use the "filtered out" number to check this.
+
+    # These are not strictly unit tests for Deno, but for ts_library_builder.
+    # They run under Node, but use the same //js/testing/ library.
+    run_unit_test2([
+        "node", "./node_modules/.bin/ts-node", "--project",
+        "tools/ts_library_builder/tsconfig.json",
+        "tools/ts_library_builder/test.ts"
+    ])
 
 
 if __name__ == '__main__':
