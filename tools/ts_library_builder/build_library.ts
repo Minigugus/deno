@@ -222,6 +222,7 @@ export function mergeGlobal({
   // declaration source file into a namespace that exists within the merged
   // namespace
   const importDeclarations = sourceFile.getImportDeclarations();
+  const namespaces = new Set<string>();
   for (const declaration of importDeclarations) {
     const declarationSourceFile = declaration.getModuleSpecifierSourceFile();
     if (
@@ -241,6 +242,7 @@ export function mergeGlobal({
         namespaceSourceFile(dtsSourceFile, {
           debug,
           namespace: declaration.getNamespaceImportOrThrow().getText(),
+          namespaces,
           rootPath: basePath,
           sourceFileMap
         })

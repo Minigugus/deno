@@ -257,8 +257,20 @@ export function loadFiles(project: Project, filePaths: string[]) {
 export interface NamespaceSourceFileOptions {
   debug?: boolean;
   namespace?: string;
+  namespaces: Set<string>;
   rootPath: string;
   sourceFileMap: Map<SourceFile, string>;
+}
+
+function createDeclarationError(
+  msg: string,
+  declaration: ImportDeclaration
+): Error {
+  return new Error(
+    `${msg}\n` +
+      `  In: "${declaration.getSourceFile().getFilePath()}"\n` +
+      `  Text: "${declaration.getText()}"`
+  );
 }
 
 /**
@@ -267,7 +279,13 @@ export interface NamespaceSourceFileOptions {
  */
 export function namespaceSourceFile(
   sourceFile: SourceFile,
-  { debug, namespace, rootPath, sourceFileMap }: NamespaceSourceFileOptions
+  {
+    debug,
+    namespace,
+    namespaces,
+    rootPath,
+    sourceFileMap
+  }: NamespaceSourceFileOptions
 ): string {
   if (sourceFileMap.has(sourceFile)) {
     return "";
@@ -300,22 +318,42 @@ export function namespaceSourceFile(
 
   const output = sourceFile
     .getImportDeclarations()
+    .filter(declaration => {
+      const dsf = declaration.getModuleSpecifierSourceFile();
+      if (dsf == null) {
+        try {
+          const namespaceName = declaration
+            .getNamespaceImportOrThrow()
+            .getText();
+          if (!namespaces.has(namespaceName)) {
+            throw createDeclarationError(
+              "Already defined source file under different namespace.",
+              declaration
+            );
+          }
+        } catch (e) {
+          throw createDeclarationError(
+            "Unsupported import clause.",
+            declaration
+          );
+        }
+        declaration.remove();
+      }
+      return dsf;
+    })
     .map(declaration => {
       if (
         declaration.getNamedImports().length ||
         !declaration.getNamespaceImport()
       ) {
-        throw new Error(
-          "Unsupported import clause.\n" +
-            `  In: "${declaration.getSourceFile().getFilePath()}"\n` +
-            `  Text: "${declaration.getText()}"`
-        );
+        throw createDeclarationError("Unsupported import clause.", declaration);
       }
       const text = namespaceSourceFile(
         declaration.getModuleSpecifierSourceFileOrThrow(),
         {
           debug,
           namespace: declaration.getNamespaceImportOrThrow().getText(),
+          namespaces,
           rootPath,
           sourceFileMap
         }
@@ -327,6 +365,8 @@ export function namespaceSourceFile(
   sourceFile
     .getExportDeclarations()
     .forEach(declaration => declaration.remove());
+
+  namespaces.add(namespace);
 
   return `${output}
     ${globalNamespaceText || ""}
