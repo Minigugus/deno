@@ -18,6 +18,7 @@ import {
   getSourceComment,
   loadDtsFiles,
   loadFiles,
+  logDiagnostics,
   namespaceSourceFile,
   normalizeSlashes
 } from "./ast_util";
@@ -309,6 +310,14 @@ export function main({
 
   // emit the project, which will be only the declaration files
   const inputEmitResult = inputProject.emitToMemory();
+
+  const inputDiagnostics = inputEmitResult
+    .getDiagnostics()
+    .map(d => d.compilerObject);
+  logDiagnostics(inputDiagnostics);
+  if (inputDiagnostics.length) {
+    process.exit(1);
+  }
 
   // the declaration project will be the target for the emitted files from
   // the input project, these will be used to transfer information over to
