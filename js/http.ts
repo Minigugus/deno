@@ -8,9 +8,8 @@ import * as flatbuffers from "./flatbuffers";
 import { close } from "./files";
 
 // TODO Cannot use Headers due to bug in ts_declaration_builder.
-// import { Headers } from "./headers";
-// import * as headers from "./headers";
-// import * as domTypes from "./dom_types";
+import { Headers as DenoHeaders } from "./headers";
+import * as domTypes from "./dom_types";
 
 type HttpHandler = (req: ServerRequest, res: ServerResponse) => void;
 
@@ -45,8 +44,7 @@ function deserializeHeaderFields(m: msg.HttpHeader): Array<[string, string]> {
 
 export class ServerRequest {
   // TODO Cannot do this due to ts_declaration_builder bug.
-  // headers: domTypes.Headers;
-  readonly headers: Array<[string, string]>;
+  headers: domTypes.Headers;
 
   constructor(
     readonly rid: number,
@@ -54,14 +52,12 @@ export class ServerRequest {
     readonly url: string,
     headersInit: Array<[string, string]>
   ) {
-    // TODO cannot use Headers due to ts_declaration_builder bug.
-    // this.headers = new Headers(headersInit);
-    this.headers = headersInit;
+    this.headers = new DenoHeaders(headersInit);
   }
 }
 
 export class ServerResponse {
-  headers = new Array<[string, string]>(); // TODO Use Headers
+  headers: domTypes.Headers = new DenoHeaders();
   status = 200;
 
   constructor(readonly rid: number, readonly url: string) {}
@@ -120,17 +116,16 @@ export function httpWriteResponse(
   body?: ArrayBufferView
 ): void {
   const builder = flatbuffers.createBuilder();
-  const fields = msg.HttpHeader.createFieldsVector(
-    builder,
-    res.headers.map(([key, val]) => {
-      const key_ = builder.createString(key);
-      const val_ = builder.createString(val);
-      msg.KeyValue.startKeyValue(builder);
-      msg.KeyValue.addKey(builder, key_);
-      msg.KeyValue.addValue(builder, val_);
-      return msg.KeyValue.endKeyValue(builder);
-    })
-  );
+  const offsets: flatbuffers.Offset[] = [];
+  for (const [key, val] of res.headers) {
+    const key_ = builder.createString(key);
+    const val_ = builder.createString(val);
+    msg.KeyValue.startKeyValue(builder);
+    msg.KeyValue.addKey(builder, key_);
+    msg.KeyValue.addValue(builder, val_);
+    offsets.push(msg.KeyValue.endKeyValue(builder));
+  }
+  const fields = msg.HttpHeader.createFieldsVector(builder, offsets);
   msg.HttpHeader.startHttpHeader(builder);
   msg.HttpHeader.addFields(builder, fields);
   msg.HttpHeader.addStatus(builder, res.status);
