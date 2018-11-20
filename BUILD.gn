@@ -75,6 +75,7 @@ ts_sources = [
   "js/io.ts",
   "js/libdeno.ts",
   "js/main.ts",
+  "js/main_compiler.ts",
   "js/make_temp_dir.ts",
   "js/metrics.ts",
   "js/mkdir.ts",
@@ -156,6 +157,15 @@ source_set("snapshot") {
   }
 }
 
+source_set("snapshot_compiler") {
+  inputs = [
+    "$target_gen_dir/snapshot_deno_compiler.bin",
+  ]
+  deps = [
+    ":create_snapshot_deno_compiler"
+  ]
+}
+
 rust_executable("hyper_hello") {
   source_root = "tools/hyper_hello.rs"
   extern = [
@@ -177,6 +187,7 @@ v8_static_library("deno_deps") {
   public_deps = [
     ":msg_rs",
     ":snapshot",
+    ":snapshot_creator",
     "libdeno:libdeno",
   ]
   configs = [ "libdeno:deno_config" ]
@@ -230,6 +241,35 @@ run_node("bundle") {
     rebase_path("js/main.ts", root_build_dir),
     "-o",
     rebase_path(out_dir + "main.js", root_build_dir),
+    "-n",
+    "denoMain",
+    "--sourcemapFile",
+    rebase_path("."),
+    "--silent",
+  ]
+}
+
+run_node("bundle_compiler") {
+  out_dir = "$target_gen_dir/bundle/"
+  outputs = [
+    out_dir + "main_compiler.js",
+    out_dir + "main_compiler.js.map",
+  ]
+  depfile = out_dir + "main_compiler.d"
+  deps = [
+    ":deno_runtime_declaration",
+    ":msg_ts",
+  ]
+  args = [
+    rebase_path("third_party/node_modules/rollup/bin/rollup", root_build_dir),
+    "-c",
+    rebase_path("rollup.config.js", root_build_dir),
+    "-i",
+    rebase_path("js/main_compiler.ts", root_build_dir),
+    "-o",
+    rebase_path(out_dir + "main_compiler.js", root_build_dir),
+    "-n",
+    "compilerMain",
     "--sourcemapFile",
     rebase_path("."),
     "--silent",
@@ -277,5 +317,14 @@ create_snapshot("deno") {
   source_map = "$target_gen_dir/bundle/main.js.map"
   deps = [
     ":bundle",
+  ]
+}
+
+# Generates $target_gen_dir/snapshot_deno_compiler.bin
+create_snapshot("deno_compiler") {
+  js = "$target_gen_dir/bundle/main_compiler.js"
+  source_map = "$target_gen_dir/bundle/main_compiler.js.map"
+  deps = [
+    ":bundle_compiler",
   ]
 }

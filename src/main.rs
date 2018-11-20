@@ -96,16 +96,29 @@ fn main() {
     log::LevelFilter::Info
   });
 
+  let compiler_state = Arc::new(isolate::IsolateState::new(flags, rest_argv));
+  let compiler_snapshot = unsafe { snapshot::deno_snapshot.clone() };
+  let mut compiler_isolate = isolate::Isolate::new(snapshot, state, ops::dispatch);
+  tokio_util::init(|| {
+    compiler_isolate
+      .execute("compiler_main.js", "compilerMain();")
+      .unwrap_or_else(|err| {
+        error!("{}", err);
+        std::process::exit(1);
+      });
+    compiler_isolate.event_loop();
+  });
+
   let state = Arc::new(isolate::IsolateState::new(flags, rest_argv));
   let snapshot = unsafe { snapshot::deno_snapshot.clone() };
   let mut isolate = isolate::Isolate::new(snapshot, state, ops::dispatch);
   tokio_util::init(|| {
-    isolate
+    deno_isolate
       .execute("deno_main.js", "denoMain();")
       .unwrap_or_else(|err| {
         error!("{}", err);
         std::process::exit(1);
       });
-    isolate.event_loop();
+    deno_isolate.event_loop();
   });
 }
