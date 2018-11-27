@@ -26,7 +26,7 @@ extern crate log;
 #[macro_use]
 extern crate futures;
 
-pub mod deno_dir;
+pub mod code_provider;
 pub mod errors;
 pub mod flags;
 mod fs;
@@ -96,9 +96,12 @@ fn main() {
     log::LevelFilter::Info
   });
 
+  let cp = code_provider::CodeProvider::new(flags.reload, custom_root).unwrap();
+
   let compiler_state = Arc::new(isolate::IsolateState::new(flags, rest_argv));
   let compiler_snapshot = unsafe { snapshot::deno_snapshot.clone() };
-  let mut compiler_isolate = isolate::Isolate::new(snapshot, state, ops::dispatch);
+  let mut compiler_isolate =
+    isolate::Isolate::new(snapshot, state, ops::dispatch, &cp);
   tokio_util::init(|| {
     compiler_isolate
       .execute("compiler_main.js", "compilerMain();")
@@ -111,7 +114,7 @@ fn main() {
 
   let state = Arc::new(isolate::IsolateState::new(flags, rest_argv));
   let snapshot = unsafe { snapshot::deno_snapshot.clone() };
-  let mut isolate = isolate::Isolate::new(snapshot, state, ops::dispatch);
+  let mut isolate = isolate::Isolate::new(snapshot, state, ops::dispatch, &cp);
   tokio_util::init(|| {
     deno_isolate
       .execute("deno_main.js", "denoMain();")

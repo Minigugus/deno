@@ -4,7 +4,7 @@
 // TODO Currently this module uses Tokio, but it would be nice if they were
 // decoupled.
 
-use deno_dir;
+use code_provider;
 use errors::DenoError;
 use errors::DenoResult;
 use flags;
@@ -14,7 +14,6 @@ use permissions::DenoPermissions;
 use futures::Future;
 use libc::c_void;
 use std;
-use std::env;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -42,14 +41,14 @@ pub type Dispatch =
   fn(isolate: &mut Isolate, buf: &[u8], data_buf: &'static mut [u8])
     -> (bool, Box<Op>);
 
-pub struct Isolate {
+pub struct Isolate<'a> {
   libdeno_isolate: *const libdeno::isolate,
   dispatch: Dispatch,
   rx: mpsc::Receiver<(i32, Buf)>,
   tx: mpsc::Sender<(i32, Buf)>,
   ntasks: i32,
   pub timeout_due: Option<Instant>,
-  pub state: Arc<IsolateState>,
+  pub state: Arc<IsolateState<'a>>,
 }
 
 // Isolate cannot be passed between threads but IsolateState can.
@@ -57,15 +56,15 @@ pub struct Isolate {
 // So any state that needs to be accessed outside the main V8 thread should be
 // inside IsolateState.
 #[cfg_attr(feature = "cargo-clippy", allow(stutter))]
-pub struct IsolateState {
-  pub dir: deno_dir::DenoDir,
+pub struct IsolateState<'a> {
+  pub code_provider: &'a code_provider::CodeProvider,
   pub argv: Vec<String>,
   pub permissions: DenoPermissions,
   pub flags: flags::DenoFlags,
   pub metrics: Metrics,
 }
 
-impl IsolateState {
+impl<'a> IsolateState<'a> {
   pub fn new(flags: flags::DenoFlags, argv_rest: Vec<String>) -> Self {
     let custom_root = env::var("DENO_DIR").map(|s| s.into()).ok();
     Self {
@@ -130,11 +129,12 @@ pub struct Metrics {
 
 static DENO_INIT: std::sync::Once = std::sync::ONCE_INIT;
 
-impl Isolate {
+impl<'a> Isolate<'a> {
   pub fn new(
     snapshot: libdeno::deno_buf,
     state: Arc<IsolateState>,
     dispatch: Dispatch,
+    cp: &'a code_provider::CodeProvider,
   ) -> Self {
     DENO_INIT.call_once(|| {
       unsafe { libdeno::deno_init() };
@@ -160,7 +160,7 @@ impl Isolate {
     self as *mut _ as *mut c_void
   }
 
-  pub fn from_void_ptr<'a>(ptr: *mut c_void) -> &'a mut Self {
+  pub fn from_void_ptr(ptr: *mut c_void) -> &'a mut Self {
     let ptr = ptr as *mut _;
     unsafe { &mut *ptr }
   }
@@ -265,7 +265,7 @@ impl Isolate {
   }
 }
 
-impl Drop for Isolate {
+impl<'a> Drop for Isolate<'a> {
   fn drop(&mut self) {
     unsafe { libdeno::deno_delete(self.libdeno_isolate) }
   }
