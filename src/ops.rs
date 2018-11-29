@@ -339,7 +339,7 @@ fn op_compiler_start(
       _ => None,
     };
     let cmd_id = base.cmd_id();
-    
+
     let msg_args = msg::CompilerStartResArgs {
       debug_flag: state.flags.log_debug,
       recompile_flag: state.flags.recompile,
@@ -372,7 +372,11 @@ fn op_compilation(
   debug!("op_compilation {} {}", source_map, data.len());
 
   Box::new(futures::future::result(|| -> OpResult {
-    state.code_provider.cache_compilation(current_filename, data, source_map.as_bytes())?;
+    state.code_provider.cache_compilation(
+      current_filename,
+      data,
+      source_map.as_bytes(),
+    )?;
     let builder = &mut FlatBufferBuilder::new();
     let filename_ = state.code_provider.next_compilation()?;
     let (filename, done) = match filename_ {

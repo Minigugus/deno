@@ -99,7 +99,9 @@ impl CodeProvider {
     Ok("string")
   }
 
-  pub fn next_compilation<'a>(self: &Self) -> Result<Option<&'a str>, errors::DenoError> {
+  pub fn next_compilation<'a>(
+    self: &Self,
+  ) -> Result<Option<&'a str>, errors::DenoError> {
     Ok(Some("example.ts"))
   }
 
