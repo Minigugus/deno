@@ -55,6 +55,7 @@ export function compilerStart(): CompilerStartResponse {
  * the compiler should exit.
  */
 export function compilation(
+  currentFilename: string,
   outputCode: string,
   sourceMap: string
 ): CompilationResponse {
@@ -62,8 +63,10 @@ export function compilation(
   const builder = createBuilder();
   const enc = new TextEncoder();
   const data = enc.encode(outputCode);
+  const filename_ = builder.createString(currentFilename);
   const sourceMap_ = builder.createString(sourceMap);
   msg.Compilation.startCompilation(builder);
+  msg.Compilation.addFilename(builder, filename_);
   msg.Compilation.addSourceMap(builder, sourceMap_);
   const inner = msg.Compilation.endCompilation(builder);
   const baseRes = dispatch.sendSync(builder, msg.Any.Compilation, inner, data)!;

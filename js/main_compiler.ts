@@ -53,7 +53,7 @@ export default function compilerMain() {
   while (!done) {
     const { filename } = next;
     const { outputCode, sourceMap } = compiler.compile(filename);
-    next = compilation(outputCode, sourceMap);
+    next = compilation(filename, outputCode, sourceMap);
     done = next.done;
   }
   log("compiler done");

@@ -193,6 +193,7 @@ table CompilerStartRes {
 
 table Compilation {
   data: [ubyte]; // This is the output code
+  filename: string;
   source_map: string;
 }
 

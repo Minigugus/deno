@@ -76,11 +76,11 @@ impl CodeProvider {
   }
 
   pub fn cache_compilation(
-    _self: &Self,
+    self: &Self,
     _filename: &str,
     _code: &[u8],
     _source_map: &[u8],
-  ) -> Result<(), errors::DenoError> {
+  ) -> std::io::Result<()> {
     Ok(())
   }
 
@@ -91,20 +91,20 @@ impl CodeProvider {
     Ok(&[])
   }
 
-  pub fn module_filename(
-    _self: &Self,
+  pub fn module_filename<'a>(
+    self: &Self,
     _module_specifier: &str,
     _containing_file: &str,
-  ) -> Result<String, errors::DenoError> {
-    Ok("string".to_string())
+  ) -> Result<&'a str, errors::DenoError> {
+    Ok("string")
   }
 
-  pub fn next_compilation(_self: &Self) -> Result<String, errors::DenoError> {
-    Ok("filename".to_string())
+  pub fn next_compilation<'a>(self: &Self) -> Result<Option<&'a str>, errors::DenoError> {
+    Ok(Some("example.ts"))
   }
 
   pub fn source_fetch<'a>(
-    _self: &Self,
+    self: &Self,
     _filename: &str,
   ) -> Result<(&'a [u8], msg::MediaType), errors::DenoError> {
     Ok((&[], msg::MediaType::TypeScript))
