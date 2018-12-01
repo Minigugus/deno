@@ -192,7 +192,7 @@ export class Compiler
     moduleSpecifier: ModuleSpecifier,
     containingFile: ContainingFile
   ): ModuleMetaData {
-    this._log("compiler.resolveModule", { moduleSpecifier, containingFile });
+    this._log("compiler._resolveModule", { moduleSpecifier, containingFile });
     assert(moduleSpecifier != null && moduleSpecifier.length > 0);
     let filename = this._resolveFilename(moduleSpecifier, containingFile);
     if (filename && this._moduleMetaDataMap.has(filename)) {

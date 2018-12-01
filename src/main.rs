@@ -49,6 +49,7 @@ pub mod version;
 mod eager_unix;
 
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 static LOGGER: Logger = Logger;
@@ -96,12 +97,15 @@ fn main() {
     log::LevelFilter::Info
   });
 
+  let custom_root: Option<PathBuf> = env::var("DENO_DIR").map(|s| s.into()).ok();
   let cp = code_provider::CodeProvider::new(flags.reload, custom_root).unwrap();
 
-  let compiler_state = Arc::new(isolate::IsolateState::new(flags, rest_argv));
-  let compiler_snapshot = unsafe { snapshot::deno_snapshot.clone() };
+  // we can't reuse rest_argv, otherwise it moves, but I suspect we don't really
+  // need to do it this way, but it works for now
+  let compiler_state = Arc::new(isolate::IsolateState::new(flags, rest_argv.as_slice().to_vec(), &cp));
+  let compiler_snapshot = unsafe { snapshot::compiler_snapshot.clone() };
   let mut compiler_isolate =
-    isolate::Isolate::new(snapshot, state, ops::dispatch, &cp);
+    isolate::Isolate::new(compiler_snapshot, compiler_state, ops::dispatch);
   tokio_util::init(|| {
     compiler_isolate
       .execute("compiler_main.js", "compilerMain();")
@@ -112,9 +116,9 @@ fn main() {
     compiler_isolate.event_loop();
   });
 
-  let state = Arc::new(isolate::IsolateState::new(flags, rest_argv));
-  let snapshot = unsafe { snapshot::deno_snapshot.clone() };
-  let mut isolate = isolate::Isolate::new(snapshot, state, ops::dispatch, &cp);
+  let deno_state = Arc::new(isolate::IsolateState::new(flags, rest_argv.as_slice().to_vec(), &cp));
+  let deno_snapshot = unsafe { snapshot::deno_snapshot.clone() };
+  let mut deno_isolate = isolate::Isolate::new(deno_snapshot, deno_state, ops::dispatch);
   tokio_util::init(|| {
     deno_isolate
       .execute("deno_main.js", "denoMain();")

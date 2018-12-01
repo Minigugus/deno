@@ -55,6 +55,7 @@ ts_sources = [
   "js/blob.ts",
   "js/buffer.ts",
   "js/chmod.ts",
+  "js/code_provider.ts",
   "js/compiler.ts",
   "js/console.ts",
   "js/copy_file.ts",
@@ -189,7 +190,6 @@ v8_static_library("deno_deps") {
   public_deps = [
     ":msg_rs",
     ":snapshot",
-    ":snapshot_creator",
     "libdeno:libdeno",
   ]
   configs = [ "libdeno:deno_config" ]

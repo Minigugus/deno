@@ -5,14 +5,14 @@ import * as util from "./util";
 import * as flatbuffers from "./flatbuffers";
 import { sendSync } from "./dispatch";
 
-interface CodeInfo {
-  moduleName: string | undefined;
-  filename: string | undefined;
-  mediaType: msg.MediaType;
-  sourceCode: string | undefined;
-  outputCode: string | undefined;
-  sourceMap: string | undefined;
-}
+// interface CodeInfo {
+//   moduleName: string | undefined;
+//   filename: string | undefined;
+//   mediaType: msg.MediaType;
+//   sourceCode: string | undefined;
+//   outputCode: string | undefined;
+//   sourceMap: string | undefined;
+// }
 
 /** Exit the Deno process with optional exit code. */
 export function exit(exitCode = 0): never {
@@ -24,62 +24,62 @@ export function exit(exitCode = 0): never {
   return util.unreachable();
 }
 
-// @internal
-export function codeFetch(
-  moduleSpecifier: string,
-  containingFile: string
-): CodeInfo {
-  util.log("os.ts codeFetch", moduleSpecifier, containingFile);
-  // Send CodeFetch message
-  const builder = flatbuffers.createBuilder();
-  const moduleSpecifier_ = builder.createString(moduleSpecifier);
-  const containingFile_ = builder.createString(containingFile);
-  msg.CodeFetch.startCodeFetch(builder);
-  msg.CodeFetch.addModuleSpecifier(builder, moduleSpecifier_);
-  msg.CodeFetch.addContainingFile(builder, containingFile_);
-  const inner = msg.CodeFetch.endCodeFetch(builder);
-  const baseRes = sendSync(builder, msg.Any.CodeFetch, inner);
-  assert(baseRes != null);
-  assert(
-    msg.Any.CodeFetchRes === baseRes!.innerType(),
-    `base.innerType() unexpectedly is ${baseRes!.innerType()}`
-  );
-  const codeFetchRes = new msg.CodeFetchRes();
-  assert(baseRes!.inner(codeFetchRes) != null);
-  // flatbuffers returns `null` for an empty value, this does not fit well with
-  // idiomatic TypeScript under strict null checks, so converting to `undefined`
-  return {
-    moduleName: codeFetchRes.moduleName() || undefined,
-    filename: codeFetchRes.filename() || undefined,
-    mediaType: codeFetchRes.mediaType(),
-    sourceCode: codeFetchRes.sourceCode() || undefined,
-    outputCode: codeFetchRes.outputCode() || undefined,
-    sourceMap: codeFetchRes.sourceMap() || undefined
-  };
-}
+// // @internal
+// export function codeFetch(
+//   moduleSpecifier: string,
+//   containingFile: string
+// ): CodeInfo {
+//   util.log("os.ts codeFetch", moduleSpecifier, containingFile);
+//   // Send CodeFetch message
+//   const builder = flatbuffers.createBuilder();
+//   const moduleSpecifier_ = builder.createString(moduleSpecifier);
+//   const containingFile_ = builder.createString(containingFile);
+//   msg.CodeFetch.startCodeFetch(builder);
+//   msg.CodeFetch.addModuleSpecifier(builder, moduleSpecifier_);
+//   msg.CodeFetch.addContainingFile(builder, containingFile_);
+//   const inner = msg.CodeFetch.endCodeFetch(builder);
+//   const baseRes = sendSync(builder, msg.Any.CodeFetch, inner);
+//   assert(baseRes != null);
+//   assert(
+//     msg.Any.CodeFetchRes === baseRes!.innerType(),
+//     `base.innerType() unexpectedly is ${baseRes!.innerType()}`
+//   );
+//   const codeFetchRes = new msg.CodeFetchRes();
+//   assert(baseRes!.inner(codeFetchRes) != null);
+//   // flatbuffers returns `null` for an empty value, this does not fit well with
+//   // idiomatic TypeScript under strict null checks, so converting to `undefined`
+//   return {
+//     moduleName: codeFetchRes.moduleName() || undefined,
+//     filename: codeFetchRes.filename() || undefined,
+//     mediaType: codeFetchRes.mediaType(),
+//     sourceCode: codeFetchRes.sourceCode() || undefined,
+//     outputCode: codeFetchRes.outputCode() || undefined,
+//     sourceMap: codeFetchRes.sourceMap() || undefined
+//   };
+// }
 
-// @internal
-export function codeCache(
-  filename: string,
-  sourceCode: string,
-  outputCode: string,
-  sourceMap: string
-): void {
-  util.log("os.ts codeCache", filename, sourceCode, outputCode);
-  const builder = flatbuffers.createBuilder();
-  const filename_ = builder.createString(filename);
-  const sourceCode_ = builder.createString(sourceCode);
-  const outputCode_ = builder.createString(outputCode);
-  const sourceMap_ = builder.createString(sourceMap);
-  msg.CodeCache.startCodeCache(builder);
-  msg.CodeCache.addFilename(builder, filename_);
-  msg.CodeCache.addSourceCode(builder, sourceCode_);
-  msg.CodeCache.addOutputCode(builder, outputCode_);
-  msg.CodeCache.addSourceMap(builder, sourceMap_);
-  const inner = msg.CodeCache.endCodeCache(builder);
-  const baseRes = sendSync(builder, msg.Any.CodeCache, inner);
-  assert(baseRes == null); // Expect null or error.
-}
+// // @internal
+// export function codeCache(
+//   filename: string,
+//   sourceCode: string,
+//   outputCode: string,
+//   sourceMap: string
+// ): void {
+//   util.log("os.ts codeCache", filename, sourceCode, outputCode);
+//   const builder = flatbuffers.createBuilder();
+//   const filename_ = builder.createString(filename);
+//   const sourceCode_ = builder.createString(sourceCode);
+//   const outputCode_ = builder.createString(outputCode);
+//   const sourceMap_ = builder.createString(sourceMap);
+//   msg.CodeCache.startCodeCache(builder);
+//   msg.CodeCache.addFilename(builder, filename_);
+//   msg.CodeCache.addSourceCode(builder, sourceCode_);
+//   msg.CodeCache.addOutputCode(builder, outputCode_);
+//   msg.CodeCache.addSourceMap(builder, sourceMap_);
+//   const inner = msg.CodeCache.endCodeCache(builder);
+//   const baseRes = sendSync(builder, msg.Any.CodeCache, inner);
+//   assert(baseRes == null); // Expect null or error.
+// }
 
 function createEnv(inner: msg.EnvironRes): { [index: string]: string } {
   const env: { [index: string]: string } = {};
