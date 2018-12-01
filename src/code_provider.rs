@@ -436,7 +436,8 @@ pub struct CodeFetchOutput {
 pub fn test_setup() -> (TempDir, CodeProvider) {
   let temp_dir = TempDir::new().expect("tempdir fail");
   let code_provider =
-    CodeProvider::new(false, Some(temp_dir.path().to_path_buf())).expect("setup fail");
+    CodeProvider::new(false, Some(temp_dir.path().to_path_buf()))
+      .expect("setup fail");
   (temp_dir, code_provider)
 }
 

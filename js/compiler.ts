@@ -284,6 +284,7 @@ export class Compiler
     }
     const { sourceCode, mediaType } = moduleMetaData;
     console.warn("Compiling", filename);
+    this._scriptFileNames = [filename];
     let outputCode = "";
     let sourceMap = "";
     // Instead of using TypeScript to transpile JSON modules, we will just do

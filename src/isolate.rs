@@ -132,7 +132,7 @@ pub struct Metrics {
 
 static DENO_INIT: std::sync::Once = std::sync::ONCE_INIT;
 
-impl <'a> Isolate<'a> {
+impl<'a> Isolate<'a> {
   pub fn new(
     snapshot: libdeno::deno_buf,
     state: Arc<IsolateState<'a>>,
@@ -267,7 +267,7 @@ impl <'a> Isolate<'a> {
   }
 }
 
-impl <'a> Drop for Isolate<'a> {
+impl<'a> Drop for Isolate<'a> {
   fn drop(&mut self) {
     unsafe { libdeno::deno_delete(self.libdeno_isolate) }
   }
