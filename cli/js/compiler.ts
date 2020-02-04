@@ -10,6 +10,8 @@
 // Either of these functions must be called when creating isolate
 // to properly setup runtime.
 
+// <reference types="../../deno_typescript/globals" />
+
 // NOTE: this import has side effects!
 import "./ts_global.d.ts";
 

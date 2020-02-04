@@ -1,5 +1,15 @@
 pub const TS_VERSION: &str = env!("TS_VERSION");
 
+pub fn get_remote_lib_str(name: &str) -> String {
+  format!(
+    "{}{}{}{}",
+    "https://raw.githubusercontent.com/microsoft/TypeScript/v",
+    env!("TS_VERSION"),
+    "/lib/",
+    name
+  )
+}
+
 pub static CLI_SNAPSHOT: &[u8] =
   include_bytes!(concat!(env!("OUT_DIR"), "/CLI_SNAPSHOT.bin"));
 pub static CLI_SNAPSHOT_MAP: &[u8] =
@@ -53,4 +63,15 @@ fn compiler_snapshot() {
       console.log(`ts version: ${ts.version}`);
     "#,
   ));
+}
+
+#[test]
+fn test_get_remote_url() {
+  let actual = get_remote_lib_str("lib.dom.d.ts");
+  let expected = concat!(
+    "https://raw.githubusercontent.com/microsoft/TypeScript/v",
+    env!("TS_VERSION"),
+    "/lib/lib.dom.d.ts"
+  );
+  assert_eq!(expected, actual);
 }

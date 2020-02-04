@@ -1,11 +1,15 @@
 // Copyright 2018-2020 the Deno authors. All rights reserved. MIT license.
-use super::dispatch_json::{Deserialize, JsonOp, Value};
+use super::dispatch_json::Deserialize;
+use super::dispatch_json::JsonOp;
+use super::dispatch_json::Value;
 use crate::futures::future::try_join_all;
 use crate::msg;
 use crate::ops::json_op;
 use crate::state::State;
 use deno_core::Loader;
 use deno_core::*;
+use std::future::Future;
+use std::pin::Pin;
 
 pub fn init(i: &mut Isolate, s: &State) {
   i.register_op("cache", s.core_op(json_op(s.stateful_op(op_cache))));
@@ -16,6 +20,10 @@ pub fn init(i: &mut Isolate, s: &State) {
   i.register_op(
     "fetch_source_files",
     s.core_op(json_op(s.stateful_op(op_fetch_source_files))),
+  );
+  i.register_op(
+    "fetch_remote_asset",
+    s.core_op(json_op(s.stateful_op(op_fetch_remote_asset))),
   );
 }
 
@@ -153,4 +161,37 @@ fn op_fetch_source_files(
   });
 
   Ok(JsonOp::Async(future))
+}
+
+#[derive(Deserialize, Debug)]
+struct FetchRemoteAssetArgs {
+  name: String,
+}
+
+fn op_fetch_remote_asset(
+  state: &ThreadSafeState,
+  args: Value,
+  _data: Option<ZeroCopyBuf>,
+) -> Result<JsonOp, ErrBox> {
+  let args: FetchRemoteAssetArgs = serde_json::from_value(args)?;
+  debug!("args.name: {}", args.name);
+
+  let future: Pin<Box<dyn Future<Output = Result<Value, ErrBox>>>> =
+    Box::pin(async move {
+      let source_file = state
+        .global_state
+        .file_fetcher
+        .fetch_remote_asset_async(&args.name)
+        .await?;
+
+      Ok(json!({
+        "url": source_file.url.to_string(),
+        "filename": source_file.filename.to_str().unwrap(),
+        "mediaType": source_file.media_type as i32,
+        "sourceCode": String::from_utf8(source_file.source_code).unwrap(),
+      }))
+    });
+
+  let out = futures::executor::block_on(future)?;
+  Ok(JsonOp::Sync(out))
 }

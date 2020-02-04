@@ -92,15 +92,19 @@ function cache(
 }
 
 let OP_FETCH_ASSET: number;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
-/**
- * This op is called only during snapshotting.
- *
- * We really don't want to depend on JSON dispatch
- * during snapshotting, so this op exchanges strings with Rust
- * as raw byte arrays.
- */
+/** Retrieve an asset from Rust. */
 export function getAsset(name: string): string {
+  // this path should only be called for assets that are lazily loaded at
+  // runtime
+  if (dispatch.OP_FETCH_REMOTE_ASSET) {
+    util.log("compiler_util::getAsset", name);
+    return sendSync(dispatch.OP_FETCH_REMOTE_ASSET, { name }).sourceCode;
+  }
+
+  // this path should only be taken during snapshotting
   if (!OP_FETCH_ASSET) {
     const ops = core.ops();
     const opFetchAsset = ops["fetch_asset"];
@@ -108,10 +112,17 @@ export function getAsset(name: string): string {
     OP_FETCH_ASSET = opFetchAsset;
   }
 
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+  // We really don't want to depend on JSON dispatch during snapshotting, so
+  // this op exchanges strings with Rust as raw byte arrays.
   const sourceCodeBytes = core.dispatch(OP_FETCH_ASSET, encoder.encode(name));
   return decoder.decode(sourceCodeBytes!);
+}
+
+/** Some assets are only lazily requested at runtime via the compiler APIs,
+ * This will invoke an op to request that.
+ */
+export function getRemoteAsset(name: string): { sourceCode: string } {
+  return sendSync(dispatch.OP_FETCH_REMOTE_ASSET, { name });
 }
 
 /** Generates a `writeFile` function which can be passed to the compiler `Host`

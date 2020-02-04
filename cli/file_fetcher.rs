@@ -7,6 +7,7 @@ use crate::http_util;
 use crate::http_util::create_http_client;
 use crate::http_util::FetchOnceResult;
 use crate::http_util::ResultPayload;
+use crate::js::get_remote_lib_str;
 use crate::msg;
 use crate::progress::Progress;
 use deno_core::ErrBox;
@@ -161,13 +162,25 @@ impl SourceFileFetcher {
     futures::executor::block_on(fut).ok()
   }
 
+  /// Given a `name`, resolve a fully qualified URL to fetch the asset from and
+  /// return a future which resolves with the source file.
+  pub fn fetch_remote_asset_async(
+    &self,
+    name: &str,
+  ) -> Pin<Box<SourceFileFuture>> {
+    debug!("fetch_remote_asset_async name: {} ", name);
+    let specifier =
+      ModuleSpecifier::resolve_url(&get_remote_lib_str(name)).unwrap();
+    self.fetch_source_file_async(&specifier, None)
+  }
+
   pub fn fetch_source_file_async(
     &self,
     specifier: &ModuleSpecifier,
     maybe_referrer: Option<ModuleSpecifier>,
   ) -> Pin<Box<SourceFileFuture>> {
     let module_url = specifier.as_url().to_owned();
-    debug!("fetch_source_file. specifier {} ", &module_url);
+    debug!("fetch_source_file_async specifier: {} ", &module_url);
 
     // Check if this file was already fetched and can be retrieved from in-process cache.
     if let Some(source_file) = self.source_file_cache.get(specifier.to_string())
@@ -368,18 +381,13 @@ impl SourceFileFetcher {
       }
       Ok(c) => c,
     };
-    let media_type = map_content_type(
-      &filepath,
-      source_code_headers.mime_type.as_ref().map(String::as_str),
-    );
+    let media_type =
+      map_content_type(&filepath, source_code_headers.mime_type.as_deref());
     let types_url = match media_type {
       msg::MediaType::JavaScript | msg::MediaType::JSX => get_types_url(
         &module_url,
         &source_code,
-        source_code_headers
-          .x_typescript_types
-          .as_ref()
-          .map(String::as_str),
+        source_code_headers.x_typescript_types.as_deref(),
       ),
       _ => None,
     };
@@ -517,16 +525,14 @@ impl SourceFileFetcher {
             .location
             .join(dir.deps_cache.get_cache_filename(&module_url));
 
-          let media_type = map_content_type(
-            &filepath,
-            maybe_content_type.as_ref().map(String::as_str),
-          );
+          let media_type =
+            map_content_type(&filepath, maybe_content_type.as_deref());
 
           let types_url = match media_type {
             msg::MediaType::JavaScript | msg::MediaType::JSX => get_types_url(
               &module_url,
               &source,
-              x_typescript_types.as_ref().map(String::as_str),
+              x_typescript_types.as_deref(),
             ),
             _ => None,
           };
@@ -1683,6 +1689,17 @@ mod tests {
         ErrorKind::Other
       );
     }
+  }
+
+  #[test]
+  fn test_fetch_remote_asset() {
+    let (_temp_dir, fetcher) = test_setup();
+
+    tokio_util::run(fetcher.fetch_remote_asset_async("lib.dom.d.ts").map(
+      |r| {
+        assert!(r.is_ok());
+      },
+    ));
   }
 
   #[test]

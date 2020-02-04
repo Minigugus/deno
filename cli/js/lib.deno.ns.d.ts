@@ -1,7 +1,6 @@
 // Copyright 2018-2020 the Deno authors. All rights reserved. MIT license.
 
 /// <reference no-default-lib="true" />
-/// <reference lib="esnext" />
 
 declare namespace Deno {
   /** The current process id of the runtime. */
@@ -1876,6 +1875,10 @@ declare namespace Deno {
     /** Emit class fields with ECMAScript-standard semantics. Defaults to `false`.
      * Does not apply to `"esnext"` target. */
     useDefineForClassFields?: boolean;
+
+    /** List of library files to be included in the compilation.  If omitted,
+     * then the Deno main runtime libs are used. */
+    lib?: string[];
 
     /** The locale to use to show error messages. */
     locale?: string;
