@@ -1691,15 +1691,12 @@ mod tests {
     }
   }
 
-  #[test]
-  fn test_fetch_remote_asset() {
+  #[tokio::test]
+  async fn test_fetch_remote_asset() {
     let (_temp_dir, fetcher) = test_setup();
 
-    tokio_util::run(fetcher.fetch_remote_asset_async("lib.dom.d.ts").map(
-      |r| {
-        assert!(r.is_ok());
-      },
-    ));
+    let r = fetcher.fetch_remote_asset_async("lib.dom.d.ts").await;
+    assert!(r.is_ok());
   }
 
   #[test]
