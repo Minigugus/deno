@@ -529,11 +529,9 @@ impl SourceFileFetcher {
             map_content_type(&filepath, maybe_content_type.as_deref());
 
           let types_url = match media_type {
-            msg::MediaType::JavaScript | msg::MediaType::JSX => get_types_url(
-              &module_url,
-              &source,
-              x_typescript_types.as_deref(),
-            ),
+            msg::MediaType::JavaScript | msg::MediaType::JSX => {
+              get_types_url(&module_url, &source, x_typescript_types.as_deref())
+            }
             _ => None,
           };
 
