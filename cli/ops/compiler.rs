@@ -169,17 +169,17 @@ struct FetchRemoteAssetArgs {
 }
 
 fn op_fetch_remote_asset(
-  state: &ThreadSafeState,
+  state: &State,
   args: Value,
   _data: Option<ZeroCopyBuf>,
 ) -> Result<JsonOp, ErrBox> {
   let args: FetchRemoteAssetArgs = serde_json::from_value(args)?;
   debug!("args.name: {}", args.name);
+  let global_state = state.borrow().global_state.clone();
 
   let future: Pin<Box<dyn Future<Output = Result<Value, ErrBox>>>> =
     Box::pin(async move {
-      let source_file = state
-        .global_state
+      let source_file = global_state
         .file_fetcher
         .fetch_remote_asset_async(&args.name)
         .await?;
