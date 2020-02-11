@@ -38,7 +38,7 @@ export interface ConfigureResponse {
  * runtime). */
 export const defaultBundlerOptions: ts.CompilerOptions = {
   inlineSourceMap: false,
-  module: ts.ModuleKind.AMD,
+  module: ts.ModuleKind.System,
   outDir: undefined,
   outFile: `${OUT_DIR}/bundle.js`,
   // disabled until we have effective way to modify source maps
