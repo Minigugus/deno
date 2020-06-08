@@ -112,3 +112,85 @@ And there are some unstable:
 - `Deno.signal`
 - `Deno.listenDatagram`
 - `Deno.startTls`
+
+## std/browser/deno_shim_sw.js
+
+A Service Worker API that transpile and cache TypeScript and JavaScript files
+on the fly. It also supports the `import.meta.main` attribute.
+
+This file is written in JavaScript to 
+
+For performences reasons, it does not report TypeScript errors.
+
+### Usage
+
+You need to use your own Service Worker that make use of
+`std/browser/deno_shim_sw.js`:
+
+`./your_sw.js`
+```ts
+importScripts('https://deno.land/std/browser/deno_shim_sw.js');
+
+// This global object `DenoSw` is now available, with the function
+// `transpileAndCache` that take in argument the request to process.
+
+self.addEventListener('fetch', e => {
+  if (
+    // Only process request from `import`
+    e.request.destination === 'script' ||
+    e.request.destination === 'worker'
+  )
+    e.respondWith(DenoSw.transpileAndCache(e));
+});
+```
+
+`./your_main_page.html`
+```html
+<script>
+  navigator.serviceWorker.register('./your_sw.js')
+    .then(() => console.info(
+      'Service Worker registered. You can now import TypeScript files !'
+    ))
+</script>
+```
+
+This Service Worker will now cache all your JavaScript files and transpile
+TypeScript files when necessary. Just use import normally your code:
+
+```js
+await import('https://deno.land/std/examples/welcome.ts')
+// => Welcome to Deno 🦕
+```
+
+You can customize our Service Worker, with URL filtering for instance:
+
+```js
+self.addEventListener('fetch', e => {
+  if (
+    // Only transpile and cache files matching `https://deno.land/std/*`
+    e.request.url.startsWith('https://deno.land/std/') && (
+      e.request.destination === 'script' ||
+      e.request.destination === 'worker'
+    )
+  )
+    e.respondWith(DenoSw.transpileAndCache(e));
+});
+```
+
+### `import.meta.main`
+
+`Deno` also provide `import.meta.main` that is only set to `true` in the file
+passed in the command line. In the browser, there is no command line, which
+mean any file can be the entry point. This Service Worker provide a solution:
+just add `#main` at the end of an `import` and the `import.meta.main` will
+be set to `true` in the imported file.
+
+```js
+// `import.meta.main === undefined`
+import 'https://deno.land/std/examples/colors.ts';
+// no output
+
+// `import.meta.main === true`
+import 'https://deno.land/std/examples/colors.ts#main';
+// outputs: Hello world
+```
